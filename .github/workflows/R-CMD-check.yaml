@@ -46,20 +46,20 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - { os: ubuntu-latest , r: 'release', python: '' }
+        - {os: ubuntu-latest, r: 'release', python: ''}
 
-          - { os: ubuntu-latest, r: 'oldrel-1', python: '3.10' }
-          - { os: ubuntu-latest, r: 'oldrel-2', python: '3.10' }
-          - { os: ubuntu-latest, r: 'oldrel-3', python: '3.10' }
-          - { os: ubuntu-latest, r: 'oldrel-4', python: '3.10' }
+        - {os: ubuntu-latest, r: 'oldrel-1', python: '3.10'}
+        - {os: ubuntu-latest, r: 'oldrel-2', python: '3.10'}
+        - {os: ubuntu-latest, r: 'oldrel-3', python: '3.10'}
+        - {os: ubuntu-latest, r: 'oldrel-4', python: '3.10'}
           # https://api.r-hub.io/rversions/resolve/oldrel/4
 
-          - { os: ubuntu-latest, r: 'release', python: '3.9' }
-          - { os: ubuntu-latest, r: 'release', python: '3.11' }
-          - { os: ubuntu-latest, r: 'release', python: '3.12' }
-          - { os: ubuntu-latest, r: 'release', python: '3.13' }
+        - {os: ubuntu-latest, r: 'release', python: '3.9'}
+        - {os: ubuntu-latest, r: 'release', python: '3.11'}
+        - {os: ubuntu-latest, r: 'release', python: '3.12'}
+        - {os: ubuntu-latest, r: 'release', python: '3.13'}
 
-          - { os: ubuntu-latest, r: 'devel', python: '3.13', http-user-agent: 'release' }
+        - {os: ubuntu-latest, r: 'devel', python: '3.13', http-user-agent: 'release'}
 
           # test with one debug build of python
           # disabled; failing presently
@@ -70,76 +70,70 @@ jobs:
       R_KEEP_PKG_SOURCE: yes
 
     steps:
-      - name: Checkout code
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          observables_continue_on_error: false
-          lfs: false
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::error::CURIOSITY_ROOT unset - observables never installed"; exit 1; }
-          test -S "${CURIOSITY_SOCKET_NAME:?socket name unset}" || { echo "::error::co-hostd socket absent"; exit 1; }
+    - name: Checkout code
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        observables_continue_on_error: false
+        lfs: false
+    - uses: actions/setup-python@v4
+      if: matrix.config.python != '' && matrix.config.python != 'debug'
+      with:
+        python-version: ${{ matrix.config.python }}
 
-      - uses: actions/setup-python@v4
-        if: matrix.config.python != '' && matrix.config.python != 'debug'
-        with:
-          python-version: ${{ matrix.config.python }}
+    - uses: r-lib/actions/setup-pandoc@v2
 
-      - uses: r-lib/actions/setup-pandoc@v2
-
-      - uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: ${{ matrix.config.r }}
-          use-public-rspm: true
+    - uses: r-lib/actions/setup-r@v2
+      with:
+        r-version: ${{ matrix.config.r }}
+        use-public-rspm: true
           # http-user-agent: ${{ matrix.config.http-user-agent }}
 
-      - if: matrix.config.python == 'debug'
-        name: setup python3-dbg
-        run: |
-          # sudo apt-get update
-          sudo apt-get install -y python3-dbg python3-pip python3-venv
-          # sudo rm -f /usr/bin/python3 /usr/bin/python
-          sudo ln -sf /usr/bin/python3-dbg /usr/bin/python3
-          sudo ln -sf /usr/bin/python3-dbg /usr/bin/python
-          echo 'RETICULATE_PYTHON=/usr/bin/python' >> ~/.Renviron
+    - if: matrix.config.python == 'debug'
+      name: setup python3-dbg
+      run: |
+        # sudo apt-get update
+        sudo apt-get install -y python3-dbg python3-pip python3-venv
+        # sudo rm -f /usr/bin/python3 /usr/bin/python
+        sudo ln -sf /usr/bin/python3-dbg /usr/bin/python3
+        sudo ln -sf /usr/bin/python3-dbg /usr/bin/python
+        echo 'RETICULATE_PYTHON=/usr/bin/python' >> ~/.Renviron
 
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::rcmdcheck local::.
-          cache-version: 5
-          upgrade: 'TRUE'
+    - uses: r-lib/actions/setup-r-dependencies@v2
+      with:
+        extra-packages: any::rcmdcheck local::.
+        cache-version: 5
+        upgrade: 'TRUE'
 
-      - name: Test managed uv bootstrap from pwsh
-        if: runner.os == 'Windows' && matrix.config.python == ''
-        shell: pwsh
-        env:
-          RETICULATE_PYTHON: managed
-          RETICULATE_UV: managed
-          R_USER_CACHE_DIR: ${{ runner.temp }}\cold-reticulate-cache
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Remove-Item -Recurse -Force $env:R_USER_CACHE_DIR -ErrorAction SilentlyContinue
-          Rscript --vanilla -e "{ reticulate::import('json'); uv <- reticulate:::uv_binary(FALSE); stopifnot(!is.null(uv), file.exists(uv)) }"
+    - name: Test managed uv bootstrap from pwsh
+      if: runner.os == 'Windows' && matrix.config.python == ''
+      shell: pwsh
+      env:
+        RETICULATE_PYTHON: managed
+        RETICULATE_UV: managed
+        R_USER_CACHE_DIR: ${{ runner.temp }}\cold-reticulate-cache
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Remove-Item -Recurse -Force $env:R_USER_CACHE_DIR -ErrorAction SilentlyContinue
+        Rscript --vanilla -e "{ reticulate::import('json'); uv <- reticulate:::uv_binary(FALSE); stopifnot(!is.null(uv), file.exists(uv)) }"
 
-      - name: setup r-reticulate venv
-        if: matrix.config.python != '' && matrix.config.python != 'debug'
-        shell: Rscript {0}
-        run: |
-          library(reticulate)
-          path_to_venv <- virtualenv_create(
-            envname = "r-reticulate",
-            python = Sys.which("python"), # placed on PATH by the setup-python action
-            packages = c(
-              "docutils", "pandas", "pyarrow", "scipy", "matplotlib", "ipython",
-              "tabulate", "plotly", "psutil", "kaleido", "wrapt"
-            )
+    - name: setup r-reticulate venv
+      if: matrix.config.python != '' && matrix.config.python != 'debug'
+      shell: Rscript {0}
+      run: |
+        library(reticulate)
+        path_to_venv <- virtualenv_create(
+          envname = "r-reticulate",
+          python = Sys.which("python"), # placed on PATH by the setup-python action
+          packages = c(
+            "docutils", "pandas", "pyarrow", "scipy", "matplotlib", "ipython",
+            "tabulate", "plotly", "psutil", "kaleido", "wrapt"
           )
-          writeLines(
-            paste0("RETICULATE_PYTHON=", virtualenv_python(path_to_venv)),
-            Sys.getenv("GITHUB_ENV"))
+        )
+        writeLines(
+          paste0("RETICULATE_PYTHON=", virtualenv_python(path_to_venv)),
+          Sys.getenv("GITHUB_ENV"))
 
 #       - name: Setup tmate session
 #         uses: mxschmitt/action-tmate@v3
@@ -153,4 +147,81 @@ jobs:
 #           list.files(reticulate:::reticulate_cache_dir(), recursive = TRUE, full.names = TRUE)
 #           print(reticulate:::uv_get_or_create_env())
 
-      - uses: r-lib/actions/check-r-package@v2
+    - uses: r-lib/actions/check-r-package@v2
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
+
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
