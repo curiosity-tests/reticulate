@@ -2,8 +2,6 @@ name: Close 'awaiting response' labeled issues
 
 on:
   workflow_dispatch:
-  schedule:
-  - cron: '0 6 * * *'
 
 jobs:
   close-issues-with-no-response:
